@@ -1,0 +1,31 @@
+team,park,city,lat,lon,roof_type
+Arizona Diamondbacks,Chase Field,Phoenix AZ,33.4453,-112.0667,retractable
+Atlanta Braves,Truist Park,Atlanta GA,33.8908,-84.4678,open
+Baltimore Orioles,Oriole Park at Camden Yards,Baltimore MD,39.2839,-76.6217,open
+Boston Red Sox,Fenway Park,Boston MA,42.3467,-71.0972,open
+Chicago Cubs,Wrigley Field,Chicago IL,41.9484,-87.6553,open
+Chicago White Sox,Rate Field,Chicago IL,41.8299,-87.6338,open
+Cincinnati Reds,Great American Ball Park,Cincinnati OH,39.0975,-84.5061,open
+Cleveland Guardians,Progressive Field,Cleveland OH,41.4962,-81.6852,open
+Colorado Rockies,Coors Field,Denver CO,39.7559,-104.9942,open
+Detroit Tigers,Comerica Park,Detroit MI,42.339,-83.0485,open
+Houston Astros,Daikin Park,Houston TX,29.7573,-95.3555,retractable
+Kansas City Royals,Kauffman Stadium,Kansas City MO,39.0517,-94.4803,open
+Los Angeles Angels,Angel Stadium,Anaheim CA,33.8003,-117.8827,open
+Los Angeles Dodgers,Dodger Stadium,Los Angeles CA,34.0739,-118.2400,open
+Miami Marlins,loanDepot Park,Miami FL,25.7781,-80.2196,retractable
+Milwaukee Brewers,American Family Field,Milwaukee WI,43.028,-87.9712,retractable
+Minnesota Twins,Target Field,Minneapolis MN,44.9817,-93.2776,open
+New York Mets,Citi Field,New York NY,40.7571,-73.8458,open
+New York Yankees,Yankee Stadium,New York NY,40.8296,-73.9262,open
+Athletics,Sutter Health Park,Sacramento CA,38.5801,-121.5136,open
+Philadelphia Phillies,Citizens Bank Park,Philadelphia PA,39.9061,-75.1665,open
+Pittsburgh Pirates,PNC Park,Pittsburgh PA,40.4468,-80.0057,open
+San Diego Padres,Petco Park,San Diego CA,32.7073,-117.1566,open
+San Francisco Giants,Oracle Park,San Francisco CA,37.7786,-122.3893,open
+Seattle Mariners,T-Mobile Park,Seattle WA,47.5914,-122.3325,retractable
+St. Louis Cardinals,Busch Stadium,St. Louis MO,38.6226,-90.1928,open
+Tampa Bay Rays,Tropicana Field,St. Petersburg FL,27.7683,-82.6534,indoor
+Texas Rangers,Globe Life Field,Arlington TX,32.7473,-97.0842,retractable
+Toronto Blue Jays,Rogers Centre,Toronto ON,43.6414,-79.3894,retractable
+Washington Nationals,Nationals Park,Washington DC,38.873,-77.0074,open

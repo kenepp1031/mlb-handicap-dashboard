@@ -1,0 +1,5 @@
+park,team,elevation_ft,roof_type,hr_factor_lhb,hr_factor_rhb,hit_factor,k_factor,notes
+Coors Field,Rockies,5280,open,1.18,1.18,1.08,0.96,Altitude and large outfield; use current Statcast factors when available.
+Yankee Stadium,Yankees,55,open,1.12,1.02,1.00,1.00,Short right-field configuration favors left-handed pull power.
+Wrigley Field,Cubs,595,open,1.00,1.00,1.00,1.00,Wind direction and speed are essential game-day inputs.
+Tropicana Field,Rays,30,indoor,0.96,0.96,0.98,1.01,Indoor environment minimizes weather effects.

@@ -1,0 +1,93 @@
+[
+  {
+    "name": "The Odds API",
+    "url": "https://the-odds-api.com/",
+    "purpose": "Optional authenticated feed for current sportsbook moneyline, spread, and total prices in the Live Board.",
+    "priority": "primary market data",
+    "refresh": "automatic; 60-second cache"
+  },
+  {
+    "name": "ESPN MLB Scoreboard API",
+    "url": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+    "purpose": "Keyless game schedule, status, and available consensus-line context.",
+    "priority": "secondary market context",
+    "refresh": "automatic; 5-minute cache"
+  },
+  {
+    "name": "Baseball Savant Statcast Park Factors",
+    "url": "https://baseballsavant.mlb.com/leaderboard/statcast-park-factors",
+    "purpose": "Primary park, handedness, HR, hit, and strikeout adjustments.",
+    "priority": "primary",
+    "refresh": "weekly"
+  },
+  {
+    "name": "MLB Injury Report",
+    "url": "https://www.mlb.com/injury-report",
+    "purpose": "Primary injury-status cross-check.",
+    "priority": "primary",
+    "refresh": "game day; before final projections"
+  },
+  {
+    "name": "CBS Sports Injuries",
+    "url": "https://www.cbssports.com/mlb/injuries/",
+    "purpose": "Structured secondary injury and expected-return check.",
+    "priority": "secondary",
+    "refresh": "game day"
+  },
+  {
+    "name": "ESPN MLB Injuries",
+    "url": "https://www.espn.com/mlb/injuries",
+    "purpose": "Secondary injury-status cross-check.",
+    "priority": "secondary",
+    "refresh": "game day"
+  },
+  {
+    "name": "ESPN MLB Odds",
+    "url": "https://www.espn.com/mlb/odds",
+    "purpose": "Game-market reference and odds cross-check.",
+    "priority": "secondary",
+    "refresh": "game day"
+  },
+  {
+    "name": "DraftKings Network Betting Splits",
+    "url": "https://dknetwork.draftkings.com/draftkings-sportsbook-betting-splits/",
+    "purpose": "Public bet and handle context; never a stand-alone prediction.",
+    "priority": "context",
+    "refresh": "game day"
+  },
+  {
+    "name": "CBS Expert Picks",
+    "url": "https://www.cbssports.com/mlb/expert-picks/",
+    "purpose": "Human-consensus context.",
+    "priority": "context",
+    "refresh": "game day"
+  },
+  {
+    "name": "Pickswise MLB Picks",
+    "url": "https://www.pickswise.com/mlb/picks/",
+    "purpose": "Human-consensus context.",
+    "priority": "context",
+    "refresh": "game day"
+  },
+  {
+    "name": "CBS MLB Rivalries",
+    "url": "https://www.cbssports.com/mlb/news/ranking-mlbs-best-rivalries-of-2025-mets-vs-phillies-yankees-vs-red-sox-an-nl-west-triumvirate-and-more/",
+    "purpose": "Contextual rivalry labels only; not a default model input.",
+    "priority": "context",
+    "refresh": "seasonally"
+  },
+  {
+    "name": "r/MLB rivalry discussion",
+    "url": "https://www.reddit.com/r/mlb/comments/1eqtkua/what_are_the_true_rivalries/",
+    "purpose": "Fan-sentiment and label research only; not model input.",
+    "priority": "context",
+    "refresh": "manual"
+  },
+  {
+    "name": "Yahoo ballpark article",
+    "url": "https://sports.yahoo.com/articles/best-worst-mlb-ballparks-home-111900589.html",
+    "purpose": "Qualitative ballpark notes; do not use as the numeric park-factor feed.",
+    "priority": "context",
+    "refresh": "manual"
+  }
+]

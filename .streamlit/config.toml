@@ -1,0 +1,11 @@
+[client]
+toolbarMode = "minimal"
+showSidebarNavigation = false
+
+[theme]
+base = "dark"
+primaryColor = "#00eaff"
+backgroundColor = "#04070f"
+secondaryBackgroundColor = "#0a1628"
+textColor = "#d9fbff"
+font = "monospace"
