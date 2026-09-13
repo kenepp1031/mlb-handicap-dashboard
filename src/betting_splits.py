@@ -62,7 +62,7 @@ def fetch_mlb_betting_splits() -> dict[str, GameSplits]:
     if response.status_code != 200:
         raise SplitsFeedError(f"DraftKings Network returned {response.status_code}")
 
-    soup = BeautifulSoup(response.text, "lxml")
+    soup = BeautifulSoup(response.text, "html.parser")
     by_team: dict[str, GameSplits] = {}
     for event in soup.select(".tb-se"):
         title = event.select_one("h5")
