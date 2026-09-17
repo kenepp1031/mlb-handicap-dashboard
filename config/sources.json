@@ -1,17 +1,10 @@
 [
   {
-    "name": "The Odds API",
-    "url": "https://the-odds-api.com/",
-    "purpose": "Optional authenticated feed for current sportsbook moneyline, spread, and total prices in the Live Board.",
-    "priority": "primary market data",
-    "refresh": "automatic; 60-second cache"
-  },
-  {
     "name": "ESPN MLB Scoreboard API",
     "url": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-    "purpose": "Keyless game schedule, status, and available consensus-line context.",
-    "priority": "secondary market context",
-    "refresh": "automatic; 5-minute cache"
+    "purpose": "Keyless DraftKings pregame moneylines for the Live Board (one request per date, no quota).",
+    "priority": "primary market data",
+    "refresh": "automatic; 10-minute cache"
   },
   {
     "name": "Baseball Savant Statcast Park Factors",

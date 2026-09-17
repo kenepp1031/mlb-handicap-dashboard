@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from src.models import clamp
+
 # Model constants. Grid-searched by scripts/tune_win_model.py on 2021-2024 regular-season
 # games, then scored on 2025-2026 games it never saw -- results in
 # calibrate_win_probability(). Re-run that script as seasons complete.
@@ -17,10 +19,6 @@ STARTER_SHARE = 0.60              # weight of the starter's own (regressed) RA9 
 STARTER_PRIOR_OUTS = 1000         # starter RA9 is regressed as if he'd also thrown this many team-average outs
 STARTER_PRIOR_SEASON_WEIGHT = 0.5 # last season's pitching line counts half as much as this season's
 PLATT_A, PLATT_B = 0.118, 1.349   # calibration: intercept = home field, slope on the neutral log5 logit
-
-
-def clamp(value: float, low: float, high: float) -> float:
-    return max(low, min(high, value))
 
 
 def pythagorean_win_pct(runs_scored: float, runs_allowed: float, exponent: float = PYTHAG_EXPONENT) -> float:

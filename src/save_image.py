@@ -1,7 +1,7 @@
 """Client-side "save as image" button for the day view.
 
-Uses html2canvas (loaded from CDN on first click) to snapshot a keyed
-Streamlit container and trigger a normal browser download of a PNG. Runs
+Uses html2canvas (loaded from CDN on first click) to snapshot the full page
+and trigger a normal browser download of a PNG. Runs
 entirely in the browser -- no server round-trip and no extra dependencies.
 """
 
@@ -108,10 +108,6 @@ _SAVE_DAY_IMAGE = st.components.v2.component(
 )
 
 
-def save_day_image_button(capture_key: str, filename: str, *, key: str | None = None):
-    """Render a button that screenshots the container keyed `capture_key`
-    and downloads it as `filename`."""
-    return _SAVE_DAY_IMAGE(
-        data={"captureKey": capture_key, "filename": filename},
-        key=key,
-    )
+def save_day_image_button(filename: str, *, key: str | None = None):
+    """Render a button that screenshots the whole page and downloads it as `filename`."""
+    return _SAVE_DAY_IMAGE(data={"filename": filename}, key=key)

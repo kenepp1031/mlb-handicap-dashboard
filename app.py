@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -11,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from src.betting_splits import SplitsFeedError, fetch_mlb_betting_splits
-from src.live_odds import OddsFeedError, fetch_the_odds_api
+from src.live_odds import OddsFeedError, fetch_espn_moneylines
 from src.mlb_stats import (
     CURRENT_SEASON,
     StatsFeedError,
@@ -27,17 +26,17 @@ from src.mlb_stats import (
 from src.odds import remove_vig
 from src.team_model import StarterLine, TeamLine, game_projection, league_runs_per_game, park_hr_factor
 from src.weather import WeatherFeedError, fetch_stadium_weather
-from src.game_context import book_price, eligible_pregame
+from src.game_context import PREGAME_STATES, book_price, eligible_pregame
 from src.save_image import save_day_image_button
 
 ROOT = Path(__file__).parent
-BOOKS = ["DraftKings"]
+BOOK = "DraftKings"
 PITCHER_K_FLAG = 0.24
 BATTER_K_FLAG = 0.23
 HR_ALLOWED_FLAG = 0.035
 PARK_HR_FLAG = 1.05
-LIVE_STATES = ("Scheduled", "Pre-Game", "Warmup")
 EDGE_FLAG_PTS = 3.0  # highlight when our win% beats DK's no-vig price by this many points
+SHARP_GAP_PTS = 10.0  # money% this far above bets% on a side = fewer, bigger bets: the usual sharp-money read
 
 st.set_page_config(page_title="MLB Edge Board", page_icon="⚾", layout="wide")
 
@@ -61,7 +60,7 @@ header[data-testid="stHeader"] { display: none; }
     to { opacity: 1; transform: translateY(0); }
 }
 
-h1, h2, h3, .hud-title { font-family: 'Orbitron', sans-serif !important; letter-spacing: 0.04em; }
+h1, h2, h3 { font-family: 'Orbitron', sans-serif !important; letter-spacing: 0.04em; }
 
 h1 {
     color: #00eaff !important;
@@ -73,9 +72,6 @@ h1 {
 }
 .hud-logo { height: 44px; width: auto; }
 .hud-logo-ball, .hud-logo-badge { filter: drop-shadow(0 0 6px rgba(0,234,255,0.35)); }
-
-/* Top control row */
-.hud-topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 
 /* HUD ticker */
 .hud-ticker {
@@ -116,7 +112,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div { padding: 10px 14px !impo
     letter-spacing: 0.03em;
 }
 .hud-caption { color: #6fd8ff; font-size: 0.72rem; opacity: 0.85; margin-bottom: 4px; }
-.hud-caption-warn { color: #ffb84d; opacity: 1; font-weight: 600; }
 
 .model-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -126,7 +121,18 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div { padding: 10px 14px !impo
 .model-row .side { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; }
 .model-row .side .ml { font-family: 'Orbitron', sans-serif; font-size: 0.95rem; color: #eafcff; }
 .model-row .side .winpct { font-size: 0.68rem; color: #6fd8ff; }
-.model-row .side .split { font-size: 0.6rem; color: #4d8fa8; opacity: 0.85; }
+
+/* DraftKings public splits: bets% and money% as bars */
+.split-bars { width: 100%; max-width: 150px; margin-top: 3px; display: flex; flex-direction: column; gap: 2px; }
+.split-bar { display: grid; grid-template-columns: 34px 1fr 30px; align-items: center; gap: 4px; font-size: 0.58rem; color: #6fd8ff; }
+.split-bar .lbl { text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.8; }
+.split-bar .val { text-align: right; color: #cdeff9; }
+.split-track { display: block; height: 6px; border-radius: 3px; background: rgba(0,234,255,0.08); border: 1px solid rgba(0,234,255,0.18); overflow: hidden; }
+.split-fill { display: block; height: 100%; border-radius: 3px; }
+.split-fill.bets { background: linear-gradient(90deg, rgba(0,234,255,0.45), #00eaff); }
+.split-fill.money { background: linear-gradient(90deg, rgba(255,184,77,0.45), #ffb84d); }
+.split-fill.sharp { background: linear-gradient(90deg, rgba(125,255,154,0.45), #7dff9a); box-shadow: 0 0 6px rgba(80,255,120,0.6); }
+.sharp-tag { font-size: 0.6rem; color: #7dff9a; text-shadow: 0 0 6px rgba(80,255,120,0.45); letter-spacing: 0.04em; margin-top: 1px; }
 .model-row .side .edge { font-size: 0.6rem; color: #6fd8ff; opacity: 0.8; }
 .model-row .side .edge.pos { color: #7dff9a; opacity: 1; text-shadow: 0 0 6px rgba(80,255,120,0.45); }
 .model-row .total { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; }
@@ -155,22 +161,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div { padding: 10px 14px !impo
 .player-row .stat { color: #6fd8ff; font-size: 0.7rem; }
 .player-row .tbd { color: #ffb84d; font-weight: 600; }
 
-.time-header {
-    font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: #00eaff;
-    letter-spacing: 0.15em; text-transform: uppercase; margin: 18px 0 8px 0;
-    padding-bottom: 4px; border-bottom: 1px solid rgba(0,234,255,0.25);
-    text-shadow: 0 0 8px rgba(0,234,255,0.4);
-}
-
-[data-testid='stMetric'] {
-    background: rgba(0,234,255,0.05); border: 1px solid rgba(0,234,255,0.25);
-    border-radius: 6px; padding: 4px 8px !important;
-}
-[data-testid='stMetricLabel'] p { font-size: 0.65rem !important; color: #6fd8ff !important; letter-spacing: 0.06em; }
-[data-testid='stMetricValue'] { font-size: 1.05rem !important; color: #eafcff !important; font-family: 'Orbitron', sans-serif; }
-[data-testid='stMetricDelta'] { font-size: 0.7rem !important; }
-
-.stDataFrame { font-size: 0.78rem !important; }
 [data-testid="stAlert"] { padding: 6px 10px !important; font-size: 0.8rem !important; border-radius: 6px !important; }
 .stCaption, [data-testid="stCaptionContainer"] { font-size: 0.72rem !important; }
 
@@ -231,16 +221,10 @@ html, body, #root,
 </style>""", unsafe_allow_html=True)
 
 
-def odds_key() -> str:
-    try:
-        return st.secrets.get("ODDS_API_KEY", os.getenv("ODDS_API_KEY", ""))
-    except FileNotFoundError:
-        return os.getenv("ODDS_API_KEY", "")
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def live_quotes(key: str):
-    return fetch_the_odds_api(key)
+@st.cache_data(ttl=600, show_spinner=False)
+def live_quotes(game_date: date):
+    """DraftKings moneylines via ESPN's free scoreboard: no key and no request quota."""
+    return fetch_espn_moneylines(game_date)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -441,6 +425,13 @@ def build_top_pick_note(summaries) -> dict | None:
     if standing and standing.playoff_status:
         reasons.append(f"There's added motivation too: {pick_team} are {standing.playoff_status.lower()} in the playoff race.")
 
+    split = team_split(pick_team)
+    if is_sharp(split):
+        reasons.append(
+            f"DraftKings' money agrees: {pick_team} have {split.pct_handle:.0%} of the money on only "
+            f"{split.pct_bets:.0%} of the bets, so the bigger bets are landing on this side."
+        )
+
     for note in best["notes"]:
         # These are already written as full sentences (e.g. "favorable K matchup",
         # "power bats have a favorable matchup") -- just strip the leading emoji.
@@ -480,7 +471,7 @@ def team_line(stats, prev_stats, starter: StarterLine | None) -> TeamLine:
     )
 
 
-def compute_game(g, probables, quote_df, teams_by_name, standings):
+def compute_game(g, probables, teams_by_name, standings):
     """Returns a dict of everything a matchup card needs, or None if season stats aren't available."""
     home_id = teams_by_name.get(g.home_team)
     away_id = teams_by_name.get(g.away_team)
@@ -578,7 +569,7 @@ if "selected_day_idx" not in st.session_state:
     st.session_state.selected_day_idx = date.today().weekday()
 
 
-def load_day(day, quote_df, teams_by_name):
+def load_day(day, teams_by_name):
     try:
         games = mlb_schedule(day)
     except StatsFeedError as error:
@@ -589,7 +580,7 @@ def load_day(day, quote_df, teams_by_name):
         return []
 
     try:
-        probables = {p.game_pk: p for p in probable_pitchers(day)} if games else {}
+        probables = {p.game_pk: p for p in probable_pitchers(day)}
     except StatsFeedError:
         probables = {}
 
@@ -605,7 +596,7 @@ def load_day(day, quote_df, teams_by_name):
     day_summaries: list = [None] * len(games)
     with ThreadPoolExecutor(max_workers=min(8, len(games))) as pool:
         futures = {
-            pool.submit(compute_game, g, probables, quote_df, teams_by_name, standings): g
+            pool.submit(compute_game, g, probables, teams_by_name, standings): g
             for g in games
         }
         for future in as_completed(futures):
@@ -644,17 +635,6 @@ with top_right:
             player_season_stats.clear()
             league_run_environment.clear()
 
-key = odds_key()
-if not key:
-    st.warning("No ODDS_API_KEY configured — sportsbook prices won't display.")
-
-quote_df = pd.DataFrame()
-if key:
-    try:
-        quote_df = pd.DataFrame([q.__dict__ for q in live_quotes(key)])
-    except OddsFeedError as error:
-        st.warning(f"Odds feed unavailable: {error}")
-
 splits_by_team = {}
 try:
     splits_by_team = betting_splits()
@@ -675,6 +655,36 @@ def team_split(team_name: str):
         if team_mascot(short_name) == mascot:
             return game.teams[short_name]
     return None
+
+
+def is_sharp(split) -> bool:
+    """Money% running SHARP_GAP_PTS or more ahead of bets% on a side: fewer bettors but
+    more dollars, so the average bet is bigger -- the usual public read for sharp money."""
+    return (
+        split is not None and split.pct_bets is not None and split.pct_handle is not None
+        and (split.pct_handle - split.pct_bets) * 100 >= SHARP_GAP_PTS
+    )
+
+
+def split_bars_html(split) -> str:
+    """DK's bets% and money% for one side as two bars; the money bar turns green with a
+    tag when that side is drawing sharp money."""
+    if not split or split.pct_bets is None or split.pct_handle is None:
+        return ""
+    sharp = is_sharp(split)
+    money_cls = "money sharp" if sharp else "money"
+    html = (
+        '<div class="split-bars">'
+        f'<div class="split-bar"><span class="lbl">Bets</span><span class="split-track">'
+        f'<span class="split-fill bets" style="width:{split.pct_bets:.0%}"></span></span>'
+        f'<span class="val">{split.pct_bets:.0%}</span></div>'
+        f'<div class="split-bar"><span class="lbl">Money</span><span class="split-track">'
+        f'<span class="split-fill {money_cls}" style="width:{split.pct_handle:.0%}"></span></span>'
+        f'<span class="val">{split.pct_handle:.0%}</span></div>'
+    )
+    if sharp:
+        html += '<div class="sharp-tag">💎 Sharp money</div>'
+    return html + "</div>"
 
 try:
     teams_by_name = team_ids()
@@ -715,15 +725,21 @@ with strip_col:
     st.markdown('</div><div class="day-tab-strip-underline"></div>', unsafe_allow_html=True)
 
 selected_day = week_dates[st.session_state.selected_day_idx]
+
+quote_df = pd.DataFrame()
+try:
+    quote_df = pd.DataFrame([q.__dict__ for q in live_quotes(selected_day)])
+except OddsFeedError as error:
+    st.warning(f"Odds feed unavailable: {error}")
 st.caption("Research estimates using current season statistics. Historical cards are not saved pregame predictions; live-game estimates do not adjust for the score. Model-market differences are not a validated betting edge.")
 with st.spinner(f"Loading {selected_day.strftime('%A, %b %d')}…"):
-    summaries = load_day(selected_day, quote_df, teams_by_name)
+    summaries = load_day(selected_day, teams_by_name)
 
 
 def render_game_card(s, top_pick=None):
     g = s["game"]
     with st.container(border=True):
-        score_html = f'<span class="team-score">{g.home_score} — {g.away_score}</span>' if g.detailed_state not in LIVE_STATES else '<span class="vs-sep">VS</span>'
+        score_html = f'<span class="team-score">{g.home_score} — {g.away_score}</span>' if g.detailed_state not in PREGAME_STATES else '<span class="vs-sep">VS</span>'
         home_logo = team_logo_url(s.get("home_id"))
         away_logo = team_logo_url(s.get("away_id"))
         home_logo_html = f'<img class="team-logo" src="{home_logo}" />' if home_logo else ""
@@ -757,8 +773,8 @@ def render_game_card(s, top_pick=None):
                 unsafe_allow_html=True,
             )
 
-        ml_home = book_price(quote_df, g.away_team, g.home_team, "h2h", g.home_team, BOOKS[0], g.game_date) if not quote_df.empty else None
-        ml_away = book_price(quote_df, g.away_team, g.home_team, "h2h", g.away_team, BOOKS[0], g.game_date) if not quote_df.empty else None
+        ml_home = book_price(quote_df, g.away_team, g.home_team, "h2h", g.home_team, BOOK, g.game_date) if not quote_df.empty else None
+        ml_away = book_price(quote_df, g.away_team, g.home_team, "h2h", g.away_team, BOOK, g.game_date) if not quote_df.empty else None
         home_ml_html = f'<span class="ml">{ml_home[1]:+d}</span>' if ml_home else ""
         away_ml_html = f'<span class="ml">{ml_away[1]:+d}</span>' if ml_away else ""
         # Only compare before first pitch: once a game starts, DK's line is a live in-game price.
@@ -766,20 +782,12 @@ def render_game_card(s, top_pick=None):
             remove_vig(ml_home[1], ml_away[1])[0]
             if ml_home and ml_away and eligible_pregame(g) else None
         )
-        tbd_teams = s["tbd_teams"] if g.detailed_state in LIVE_STATES else []
+        tbd_teams = s["tbd_teams"] if g.detailed_state in PREGAME_STATES else []
         home_edge_html = edge_html(s["home_win_prob"], market_home, flag=not tbd_teams)
         away_edge_html = edge_html(s["away_win_prob"], None if market_home is None else 1 - market_home, flag=not tbd_teams)
 
-        home_split = team_split(g.home_team)
-        away_split = team_split(g.away_team)
-        home_split_html = (
-            f'<span class="split">{home_split.pct_bets:.0%} bets · {home_split.pct_handle:.0%} money</span>'
-            if home_split and home_split.pct_bets is not None and home_split.pct_handle is not None else ""
-        )
-        away_split_html = (
-            f'<span class="split">{away_split.pct_bets:.0%} bets · {away_split.pct_handle:.0%} money</span>'
-            if away_split and away_split.pct_bets is not None and away_split.pct_handle is not None else ""
-        )
+        home_split_html = split_bars_html(team_split(g.home_team))
+        away_split_html = split_bars_html(team_split(g.away_team))
 
         st.markdown(
             f'<div class="model-row">'
@@ -889,7 +897,7 @@ def render_grid(items, render_fn, max_cols=3, **kwargs):
 live_now = sum(1 for s in summaries if s["game"].detailed_state in ("In Progress", "Manager Challenge", "Umpire Review"))
 alerts = sum(1 for s in summaries if s["weather"] and s["weather"].is_inclement)
 
-tbd_games = sum(1 for s in summaries if s["tbd_teams"] and s["game"].detailed_state in LIVE_STATES)
+tbd_games = sum(1 for s in summaries if s["tbd_teams"] and s["game"].detailed_state in PREGAME_STATES)
 
 picks = []
 for s in summaries:
@@ -903,11 +911,7 @@ picks.sort(key=lambda p: p[1], reverse=True)
 top_picks_text = " · ".join(f"{name.split()[-1]} {prob:.0%}" for name, prob in picks[:3]) if picks else "—"
 
 with st.container(horizontal=True, horizontal_alignment="right"):
-    save_day_image_button(
-        "day_capture",
-        filename=f"mlb-picks-{selected_day.isoformat()}.png",
-        key="save_day_image",
-    )
+    save_day_image_button(filename=f"mlb-picks-{selected_day.isoformat()}.png", key="save_day_image")
 
 ticker_html = f"""<div class="hud-ticker">
 <div class="hud-chip"><div class="label">Day</div><div class="value">{selected_day.strftime('%a %b %d')} · {len(summaries)} games</div></div>

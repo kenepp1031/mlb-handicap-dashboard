@@ -12,8 +12,8 @@ import pandas as pd
 import requests
 
 from src.game_context import book_price, eligible_pregame
-from src.mlb_stats import StatsFeedError, _get, _get_live, fetch_probable_pitchers
-from src.live_odds import OddsFeedError, fetch_the_odds_api
+from src.mlb_stats import StatsFeedError, _get, fetch_probable_pitchers
+from src.live_odds import OddsFeedError, fetch_espn_moneylines
 from src.weather import WeatherFeedError, fetch_stadium_weather
 from src.team_model import TeamLine, game_projection
 
@@ -21,8 +21,7 @@ from src.team_model import TeamLine, game_projection
 class RegressionChecks(unittest.TestCase):
     def test_feed_timeouts_are_recoverable(self):
         calls = [(_get, ("/teams",), StatsFeedError),
-                 (_get_live, (1,), StatsFeedError),
-                 (fetch_the_odds_api, ("private-test-key",), OddsFeedError),
+                 (fetch_espn_moneylines, (date(2026, 9, 11),), OddsFeedError),
                  (fetch_stadium_weather, (40, -74), WeatherFeedError)]
         for fn, args, error_type in calls:
             with self.subTest(feed=fn.__name__), patch("src.feed.requests.get", side_effect=requests.Timeout("private-test-key")):

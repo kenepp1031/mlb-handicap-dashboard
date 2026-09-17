@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 PREGAME_STATES = ("Scheduled", "Pre-Game", "Warmup")
+START_TOLERANCE = pd.Timedelta(minutes=60)
 
 
 def eligible_pregame(game, now=None) -> bool:
@@ -19,9 +20,11 @@ def book_price(quote_df, away, home, market, selection, bookmaker, game_date):
     if quote_df.empty:
         return None
     start = pd.to_datetime(game_date, utc=True, errors="coerce")
+    # Feeds can list the same first pitch a few minutes apart; doubleheader games are hours apart.
+    gap = (pd.to_datetime(quote_df["commence_time"], utc=True, errors="coerce") - start).abs()
     matches = quote_df[
         quote_df["game"].eq(f"{away} @ {home}")
-        & pd.to_datetime(quote_df["commence_time"], utc=True, errors="coerce").eq(start)
+        & gap.le(START_TOLERANCE)
         & quote_df["market"].eq(market)
         & quote_df["selection"].eq(selection)
         & quote_df["bookmaker"].eq(bookmaker)

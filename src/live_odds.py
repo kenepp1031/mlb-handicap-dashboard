@@ -1,17 +1,18 @@
-"""Market-data adapters used by the dashboard.
+"""DraftKings MLB moneylines from ESPN's public scoreboard: no key, no monthly quota.
 
-The Odds API is the preferred source because it supplies sportsbook-level prices.
-An API key is optional: without one the app displays the ESPN game board, which is
-useful for schedule/status but is not a substitute for a licensed odds feed.
+One request returns every game on a date with the DraftKings line ESPN displays. ESPN only
+carries the line until first pitch, which is all the board compares against anyway.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
-from typing import Any
+from datetime import date, datetime, timezone
 
-import requests
 from src.feed import get_json
+
+SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"
+# ESPN display name -> MLB Stats API name, where they differ.
+TEAM_NAMES = {"Athletics Athletics": "Athletics", "Oakland Athletics": "Athletics"}
 
 
 @dataclass(frozen=True)
@@ -30,54 +31,42 @@ class OddsFeedError(RuntimeError):
     pass
 
 
-def fetch_the_odds_api(api_key: str, regions: str = "us") -> list[MarketQuote]:
-    """Fetch MLB h2h, spread, and totals quotes from The Odds API."""
-    data = get_json(
-        "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds",
-        OddsFeedError,
-        params={"apiKey": api_key, "regions": regions, "markets": "h2h,spreads,totals", "oddsFormat": "american"},
-    )
+def _american(value) -> int | None:
+    """ESPN writes American odds as '+135', '-163', or 'EVEN'."""
+    if value is None:
+        return None
+    text = str(value).strip().upper()
+    if text in ("EVEN", "EV"):
+        return 100
+    try:
+        return int(float(text.replace("+", "")))
+    except ValueError:
+        return None
+
+
+def fetch_espn_moneylines(game_date: date) -> list[MarketQuote]:
+    """Moneyline quotes for every game ESPN files under game_date (US calendar date)."""
+    data = get_json(SCOREBOARD, OddsFeedError, params={"dates": game_date.strftime("%Y%m%d"), "limit": 100})
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     quotes: list[MarketQuote] = []
-    for event in data:
-        game = f"{event['away_team']} @ {event['home_team']}"
-        for book in event.get("bookmakers", []):
-            for market in book.get("markets", []):
-                for outcome in market.get("outcomes", []):
-                    price = outcome.get("price")
-                    if price is None:
-                        continue
-                    quotes.append(MarketQuote(
-                        game=game, commence_time=event.get("commence_time", ""),
-                        bookmaker=book.get("title", book.get("key", "Unknown")),
-                        market=market.get("key", ""), selection=outcome.get("name", ""),
-                        point=outcome.get("point"), american_odds=int(price),
-                        updated_at=book.get("last_update"),
-                    ))
+    for event in data.get("events", []):
+        comp = (event.get("competitions") or [{}])[0]
+        sides = {c.get("homeAway"): c.get("team", {}).get("displayName", "") for c in comp.get("competitors", [])}
+        teams = {k: TEAM_NAMES.get(v, v) for k, v in sides.items()}
+        if not teams.get("home") or not teams.get("away"):
+            continue
+        game = f"{teams['away']} @ {teams['home']}"
+        for item in comp.get("odds") or []:
+            book = (item.get("provider") or {}).get("name", "Unknown")
+            moneyline = item.get("moneyline") or {}
+            for side in ("home", "away"):
+                line = moneyline.get(side) or {}
+                price = _american((line.get("close") or line.get("current") or line.get("open") or {}).get("odds"))
+                if price is None:
+                    continue
+                quotes.append(MarketQuote(
+                    game=game, commence_time=event.get("date", ""), bookmaker=book, market="h2h",
+                    selection=teams[side], point=None, american_odds=price, updated_at=now,
+                ))
     return quotes
-
-
-def fetch_espn_scoreboard(target_date: date | None = None) -> list[dict[str, str]]:
-    """Fetch MLB schedule/status; ESPN can expose a consensus line on some games."""
-    target = target_date or date.today()
-    response = requests.get(
-        "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-        params={"dates": target.strftime("%Y%m%d"), "limit": 100}, timeout=12,
-    )
-    if response.status_code != 200:
-        raise OddsFeedError(f"ESPN scoreboard returned {response.status_code}")
-    games: list[dict[str, str]] = []
-    for event in response.json().get("events", []):
-        competition = event.get("competitions", [{}])[0]
-        teams = competition.get("competitors", [])
-        away = next((x.get("team", {}).get("displayName", "Away") for x in teams if x.get("homeAway") == "away"), "Away")
-        home = next((x.get("team", {}).get("displayName", "Home") for x in teams if x.get("homeAway") == "home"), "Home")
-        odds = competition.get("odds", [{}])[0]
-        games.append({
-            "game": f"{away} @ {home}", "time": event.get("date", ""),
-            "status": event.get("status", {}).get("type", {}).get("shortDetail", "Scheduled"),
-            "details": odds.get("details", "No consensus line available"),
-            "over_under": str(odds.get("overUnder", "—")),
-            "provider": odds.get("provider", {}).get("name", "ESPN schedule"),
-        })
-    return games

@@ -92,7 +92,6 @@ def fetch_mlb_betting_splits() -> dict[str, GameSplits]:
             pct_bets = _to_pct(cells[3].contents[0]) if cells[3].contents else None
             split = TeamSplit(team=team, odds=odds, pct_handle=pct_handle, pct_bets=pct_bets)
             teams[team] = split
-            by_team[team] = GameSplits(matchup=matchup, teams=teams)
 
         for team in teams:
             by_team[team] = GameSplits(matchup=matchup, teams=teams)

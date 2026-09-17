@@ -1,9 +1,7 @@
-# Data folders
+# Data
 
-Store immutable, timestamped imports in `raw/` (odds, confirmed lineups, injury snapshots, weather, and final results). Do not overwrite an earlier snapshot.
-
-Suggested filename pattern:
-
-`YYYY-MM-DD_HHMM_source_dataset.csv`
-
-The MVP deliberately has no automatic web scraper. Before adding one, choose a source with permitted API or export access and capture the source terms plus the data timestamp.
+- `ballparks.csv` -- park HR factors (LHB/RHB) used by the run projection.
+- `stadiums.csv` -- park name, city, roof type, and coordinates for the weather lookup.
+- `raw/` -- gitignored cache of MLB Stats API and ESPN pulls used by `scripts/backtest.py`,
+  `scripts/tune_win_model.py`, and `scripts/market_benchmark.py`. Safe to delete; the scripts
+  re-fetch what they need.

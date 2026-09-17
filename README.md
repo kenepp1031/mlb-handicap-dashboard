@@ -1,49 +1,52 @@
-# MLB Handicap
+# MLB Edge Board
 
-Local dashboard for MLB player-prop research: pitcher strikeouts, batter hits, and home runs.
+Streamlit dashboard that prices every game on the MLB slate: a win probability and projected
+score from a regressed Pythagorean / log5 model with a starting-pitcher adjustment, shown next
+to DraftKings' no-vig moneyline, the public betting splits, weather, hot streaks, and the
+playoff picture.
 
-## Start here
+## Run it
 
-1. Install Python 3.11+ from https://www.python.org/downloads/.
-2. In PowerShell, run:
-   ```powershell
-   cd 'C:\MLB Handicap'
-   py -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   streamlit run app.py
-   ```
-3. Open the local URL Streamlit displays.
+```powershell
+cd 'C:\MLB Handicap'
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-The dashboard includes transparent baseline projections and an optional live market board.
+`Launch Dashboard.vbs` starts it with no console window (for a desktop shortcut using
+`assets/app_icon.ico`); `Launch Dashboard.bat` does the same with the console visible.
 
-## Live odds setup
+## Sportsbook prices
 
-The live board uses [The Odds API](https://the-odds-api.com/) for current MLB moneyline, spread, and total quotes. Create a provider account, then copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and insert your key. The key remains local and should never be committed. Without a key, the dashboard still shows the ESPN schedule and consensus context.
+DraftKings moneylines come from ESPN's public scoreboard feed: one request per date, cached
+10 minutes, no key and no monthly quota. ESPN carries the line until first pitch, which is the
+only time the board compares against it. The app no longer calls The Odds API at all, so it
+cannot use up the key the prop board shares. The bets/money split bars are scraped from
+DraftKings Network and need no key either.
 
-Live prices are a market-data input, not a recommendation. Confirm lineups, starters, injury status, weather, and the price immediately before making any decision.
+## Layout
 
-## Project layout
+- `app.py` -- the dashboard
+- `src/team_model.py` -- the win/run model. `game_projection()` is the one function both the
+  app and the backtest call, so what is backtested is exactly what is on screen.
+- `src/mlb_stats.py`, `src/live_odds.py`, `src/betting_splits.py`, `src/weather.py` -- feeds
+  (MLB Stats API, ESPN scoreboard, DraftKings Network, Open-Meteo)
+- `scripts/backtest.py` -- no-lookahead backtest of a season; caches API pulls under `data/raw/`
+- `scripts/tune_win_model.py` -- refits the model constants on 2021-2024, scores 2025-2026
+- `scripts/market_benchmark.py` -- model vs. the closing line (needs `scripts/fetch_espn_odds.py`)
+- `scripts/check_app.py` -- regression checks; `--live` also drives the app against real feeds
+- `config/sources.json` -- reference list of the sites and feeds behind the board
 
-- `app.py` — dashboard entry point
-- `src/` — probability models and odds utilities
-- `data/ballparks.csv` — editable ballpark context table
-- `config/sources.json` — source registry, purpose, and refresh rules
+## Reading a card
 
-## Important modeling rules
+- Win % and the predicted score are the model's. Confidence tiers come from the held-out
+  backtest (see `confidence_tier()` in `app.py`).
+- "DK xx% / edge +y" compares our win % with DraftKings' no-vig price, pregame only. Edges of
+  3+ points light up green.
+- The Bets / Money bars are DraftKings' public splits. Money running 10+ points ahead of bets
+  on a side is tagged as sharp money: fewer bettors, bigger bets.
+- A TBD starter means that side is priced off its whole staff; treat the number as rough.
 
-- Model probability and betting price separately. A likely event is not automatically a value play.
-- Remove sportsbook vig before comparing model probability to the market.
-- Do not generate a final projection without confirmed lineups, a named starter, and a current injury check.
-- Save every input snapshot and final result before backtesting.
-
-## Build summary
-
-This project is now an MLB research dashboard with a Live Board, an optional live sportsbook-odds feed, and transparent player-prop tools for pitcher strikeouts, batter hits, and home runs.
-
-- **Live Board:** Displays the MLB slate and available consensus context through ESPN. When `ODDS_API_KEY` is configured, it also retrieves current moneyline, spread, and total prices from The Odds API, compares books, and highlights the best available price for each market selection.
-- **Pitcher Ks:** Produces an expected-strikeout total, an over probability, fair odds, no-vig market probability, estimated model edge, and expected value per $1 using the entered market prices.
-- **Hits and HRs:** Produces expected hits plus probabilities and fair odds for 1+ hit and 1+ home run outcomes.
-- **Decision safeguards:** The dashboard keeps lineup, starter, injury, and weather checks visible, and labels all projections as research estimates rather than guarantees.
-
-To run the dashboard locally, use a Python installation visible to your terminal, create a virtual environment, install `requirements.txt`, and run `streamlit run app.py`. The current workspace session cannot locate a Python executable, so the app has not been launched here yet. If `python --version` works in your own terminal, run the commands in **Start here**; otherwise, provide the output of `where python` to identify the correct executable path.
+These are research estimates. Model-market differences are not a validated betting edge.

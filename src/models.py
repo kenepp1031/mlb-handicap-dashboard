@@ -39,30 +39,3 @@ def project_strikeouts(
     expected = batters * matchup_rate
     return StrikeoutProjection(expected, binomial_tail(batters, matchup_rate, int(line) + 1))
 
-
-@dataclass
-class BatterProjection:
-    expected_hits: float
-    one_plus_hit_probability: float
-    one_plus_hr_probability: float
-
-
-def project_batter(
-    plate_appearances: float,
-    batter_hit_rate: float,
-    batter_hr_rate: float,
-    pitcher_hit_factor: float = 1.0,
-    pitcher_hr_factor: float = 1.0,
-    park_hit_factor: float = 1.0,
-    park_hr_factor: float = 1.0,
-    weather_hr_factor: float = 1.0,
-) -> BatterProjection:
-    """Returns game-level hit and HR probabilities from per-PA rates."""
-    pas = max(1, round(plate_appearances))
-    hit_rate = clamp(batter_hit_rate * pitcher_hit_factor * park_hit_factor, 0.05, 0.55)
-    hr_rate = clamp(batter_hr_rate * pitcher_hr_factor * park_hr_factor * weather_hr_factor, 0.001, 0.20)
-    return BatterProjection(
-        expected_hits=pas * hit_rate,
-        one_plus_hit_probability=1 - (1 - hit_rate) ** pas,
-        one_plus_hr_probability=1 - (1 - hr_rate) ** pas,
-    )

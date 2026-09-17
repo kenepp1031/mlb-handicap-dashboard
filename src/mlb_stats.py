@@ -6,10 +6,9 @@ player K/hit/HR rates) instead of requiring the user to guess slider values.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
-import requests
 from src.feed import get_json
 
 BASE = "https://statsapi.mlb.com/api/v1"
@@ -28,7 +27,6 @@ def _get(path: str, **params: Any) -> dict:
 class TeamInfo:
     team_id: int
     name: str
-    abbreviation: str
 
 
 @dataclass(frozen=True)
@@ -38,9 +36,7 @@ class TeamStats:
     games_played: int
     batting_k_rate: float | None = None
     pitching_hr_rate_allowed: float | None = None
-    batting_avg: float | None = None
     ops: float | None = None
-    team_era: float | None = None
 
     @property
     def runs_scored_per_game(self) -> float:
@@ -64,26 +60,6 @@ class ScheduledGame:
 
 
 @dataclass(frozen=True)
-class LiveGame:
-    game_pk: int
-    detailed_state: str
-    inning: int | None
-    inning_half: str | None
-    outs: int | None
-    balls: int | None
-    strikes: int | None
-    home_team: str
-    away_team: str
-    home_score: int
-    away_score: int
-    runner_on_first: bool
-    runner_on_second: bool
-    runner_on_third: bool
-    current_batter: str | None
-    current_pitcher: str | None
-
-
-@dataclass(frozen=True)
 class ProbablePitcher:
     game: str
     game_date: str
@@ -97,13 +73,6 @@ class ProbablePitcher:
 
 
 @dataclass(frozen=True)
-class PlayerInfo:
-    player_id: int
-    full_name: str
-    position: str
-
-
-@dataclass(frozen=True)
 class PlayerStats:
     player_id: int
     full_name: str
@@ -113,15 +82,13 @@ class PlayerStats:
     hr_rate: float | None = None
     era: float | None = None
     whip: float | None = None
-    runs_allowed: float | None = None  # pitching season stats only: all runs, earned or not
-    outs: float | None = None  # pitching season stats only
+    runs_allowed: float | None = None  # pitching only: all runs, earned or not
+    outs: float | None = None  # pitching only
 
 
 @dataclass(frozen=True)
 class TeamStanding:
     team_id: int
-    wins: int
-    losses: int
     division_rank: int
     games_back: float
     wildcard_games_back: float | None
@@ -158,7 +125,7 @@ class TeamStanding:
 def fetch_teams() -> list[TeamInfo]:
     data = _get("/teams", sportId=1, activeStatus="Yes")
     return [
-        TeamInfo(team_id=t["id"], name=t["name"], abbreviation=t.get("abbreviation", ""))
+        TeamInfo(team_id=t["id"], name=t["name"])
         for t in data.get("teams", [])
     ]
 
@@ -171,7 +138,6 @@ def fetch_team_season_stats(team_id: int, season: int = CURRENT_SEASON) -> TeamS
     plate_appearances = float(hitting.get("plateAppearances", 0)) if hitting else 0.0
     strikeouts_batting = float(hitting.get("strikeOuts", 0)) if hitting else 0.0
     batting_k_rate = strikeouts_batting / plate_appearances if plate_appearances else None
-    batting_avg = float(hitting.get("avg", 0)) if hitting and hitting.get("avg") else None
     ops = float(hitting.get("ops", 0)) if hitting and hitting.get("ops") else None
 
     pitching_data = _get(f"/teams/{team_id}/stats", stats="season", group="pitching", season=season)
@@ -180,12 +146,11 @@ def fetch_team_season_stats(team_id: int, season: int = CURRENT_SEASON) -> TeamS
     batters_faced = float(pitching.get("battersFaced", 0)) if pitching else 0.0
     home_runs_allowed = float(pitching.get("homeRuns", 0)) if pitching else 0.0
     hr_rate_allowed = home_runs_allowed / batters_faced if batters_faced else None
-    team_era = float(pitching.get("era", 0)) if pitching and pitching.get("era") else None
 
     return TeamStats(
         runs_scored=runs_scored, runs_allowed=runs_allowed, games_played=games_played,
         batting_k_rate=batting_k_rate, pitching_hr_rate_allowed=hr_rate_allowed,
-        batting_avg=batting_avg, ops=ops, team_era=team_era,
+        ops=ops,
     )
 
 
@@ -238,40 +203,6 @@ def fetch_schedule(game_date: date) -> list[ScheduledGame]:
     return games
 
 
-def fetch_live_game(game_pk: int) -> LiveGame:
-    data = _get_live(game_pk)
-    live = data.get("liveData", {})
-    linescore = live.get("linescore", {})
-    game_data = data.get("gameData", {})
-    teams = game_data.get("teams", {})
-    offense = linescore.get("offense", {})
-    defense = linescore.get("defense", {})
-    line_teams = linescore.get("teams", {})
-
-    return LiveGame(
-        game_pk=game_pk,
-        detailed_state=game_data.get("status", {}).get("detailedState", "Unknown"),
-        inning=linescore.get("currentInning"),
-        inning_half=linescore.get("inningHalf"),
-        outs=linescore.get("outs"),
-        balls=linescore.get("balls"),
-        strikes=linescore.get("strikes"),
-        home_team=teams.get("home", {}).get("name", "Home"),
-        away_team=teams.get("away", {}).get("name", "Away"),
-        home_score=line_teams.get("home", {}).get("runs", 0),
-        away_score=line_teams.get("away", {}).get("runs", 0),
-        runner_on_first=bool(offense.get("first")),
-        runner_on_second=bool(offense.get("second")),
-        runner_on_third=bool(offense.get("third")),
-        current_batter=offense.get("batter", {}).get("fullName"),
-        current_pitcher=defense.get("pitcher", {}).get("fullName"),
-    )
-
-
-def _get_live(game_pk: int) -> dict:
-    return get_json(f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live", StatsFeedError)
-
-
 def fetch_probable_pitchers(game_date: date) -> list[ProbablePitcher]:
     data = _get(
         "/schedule", sportId=1, date=game_date.strftime("%m/%d/%Y"),
@@ -299,22 +230,6 @@ def fetch_probable_pitchers(game_date: date) -> list[ProbablePitcher]:
                 away_pitcher_id=away_pitcher.get("id"),
             ))
     return games
-
-
-def search_players(name: str, active_only: bool = True) -> list[PlayerInfo]:
-    if not name or len(name.strip()) < 2:
-        return []
-    data = _get("/people/search", names=name)
-    players = []
-    for p in data.get("people", []):
-        if active_only and not p.get("active", True):
-            continue
-        players.append(PlayerInfo(
-            player_id=p["id"],
-            full_name=p.get("fullName", "Unknown"),
-            position=p.get("primaryPosition", {}).get("abbreviation", ""),
-        ))
-    return players
 
 
 @dataclass(frozen=True)
@@ -406,12 +321,9 @@ def fetch_standings(season: int = CURRENT_SEASON) -> dict[int, TeamStanding]:
                 (s for s in team_record.get("records", {}).get("splitRecords", []) if s.get("type") == "lastTen"),
                 {},
             )
-            league_record = team_record.get("leagueRecord", {})
             wc_raw = team_record.get("wildCardGamesBack")
             standings[team_id] = TeamStanding(
                 team_id=team_id,
-                wins=int(league_record.get("wins", 0)),
-                losses=int(league_record.get("losses", 0)),
                 division_rank=int(team_record.get("divisionRank", 0) or 0),
                 games_back=_parse_games_back(team_record.get("divisionGamesBack")),
                 wildcard_games_back=_parse_games_back(wc_raw) if wc_raw is not None else None,
@@ -423,65 +335,44 @@ def fetch_standings(season: int = CURRENT_SEASON) -> dict[int, TeamStanding]:
     return standings
 
 
-def fetch_player_recent_stats(player_id: int, full_name: str, group: str, days: int = 14) -> PlayerStats:
-    """Same shape as fetch_player_season_stats, but over the trailing `days` window
-    only — used to spot a player heating up relative to their season line."""
-    from datetime import date as _date, timedelta as _timedelta
-
-    start = (_date.today() - _timedelta(days=days)).isoformat()
-    end = _date.today().isoformat()
-    data = _get(f"/people/{player_id}/stats", stats="byDateRange", group=group, startDate=start, endDate=end, season=CURRENT_SEASON)
-    stat = _first_split(data)
+def _player_stats(player_id: int, full_name: str, group: str, stat: dict | None) -> PlayerStats:
+    """Shared parsing for a season or date-range line. group is 'pitching' or 'hitting'."""
     if not stat:
         return PlayerStats(player_id=player_id, full_name=full_name, plate_appearances_or_batters=0.0)
 
     if group == "pitching":
         batters_faced = float(stat.get("battersFaced", 0))
         strikeouts = float(stat.get("strikeOuts", 0))
-        k_rate = strikeouts / batters_faced if batters_faced else None
-        era = float(stat.get("era", 0)) if stat.get("era") else None
-        whip = float(stat.get("whip", 0)) if stat.get("whip") else None
         return PlayerStats(
             player_id=player_id, full_name=full_name,
-            plate_appearances_or_batters=batters_faced, k_rate=k_rate, era=era, whip=whip,
-        )
-
-    plate_appearances = float(stat.get("plateAppearances", 0))
-    hits = float(stat.get("hits", 0))
-    home_runs = float(stat.get("homeRuns", 0))
-    hit_rate = hits / plate_appearances if plate_appearances else None
-    hr_rate = home_runs / plate_appearances if plate_appearances else None
-    return PlayerStats(
-        player_id=player_id, full_name=full_name,
-        plate_appearances_or_batters=plate_appearances, hit_rate=hit_rate, hr_rate=hr_rate,
-    )
-
-
-def fetch_player_season_stats(player_id: int, full_name: str, group: str, season: int = CURRENT_SEASON) -> PlayerStats:
-    """group is 'pitching' or 'hitting'."""
-    data = _get(f"/people/{player_id}/stats", stats="season", group=group, season=season)
-    stat = _first_split(data)
-    if not stat:
-        return PlayerStats(player_id=player_id, full_name=full_name, plate_appearances_or_batters=0.0)
-
-    if group == "pitching":
-        batters_faced = float(stat.get("battersFaced", 0))
-        strikeouts = float(stat.get("strikeOuts", 0))
-        k_rate = strikeouts / batters_faced if batters_faced else None
-        era = float(stat.get("era", 0)) if stat.get("era") else None
-        whip = float(stat.get("whip", 0)) if stat.get("whip") else None
-        return PlayerStats(
-            player_id=player_id, full_name=full_name,
-            plate_appearances_or_batters=batters_faced, k_rate=k_rate, era=era, whip=whip,
+            plate_appearances_or_batters=batters_faced,
+            k_rate=strikeouts / batters_faced if batters_faced else None,
+            era=float(stat["era"]) if stat.get("era") else None,
+            whip=float(stat["whip"]) if stat.get("whip") else None,
             runs_allowed=float(stat.get("runs", 0)), outs=float(stat.get("outs", 0)),
         )
 
     plate_appearances = float(stat.get("plateAppearances", 0))
     hits = float(stat.get("hits", 0))
     home_runs = float(stat.get("homeRuns", 0))
-    hit_rate = hits / plate_appearances if plate_appearances else None
-    hr_rate = home_runs / plate_appearances if plate_appearances else None
     return PlayerStats(
         player_id=player_id, full_name=full_name,
-        plate_appearances_or_batters=plate_appearances, hit_rate=hit_rate, hr_rate=hr_rate,
+        plate_appearances_or_batters=plate_appearances,
+        hit_rate=hits / plate_appearances if plate_appearances else None,
+        hr_rate=home_runs / plate_appearances if plate_appearances else None,
     )
+
+
+def fetch_player_recent_stats(player_id: int, full_name: str, group: str, days: int = 14) -> PlayerStats:
+    """Same shape as fetch_player_season_stats, but over the trailing `days` window
+    only -- used to spot a player heating up relative to their season line."""
+    start = (date.today() - timedelta(days=days)).isoformat()
+    end = date.today().isoformat()
+    data = _get(f"/people/{player_id}/stats", stats="byDateRange", group=group, startDate=start, endDate=end, season=CURRENT_SEASON)
+    return _player_stats(player_id, full_name, group, _first_split(data))
+
+
+def fetch_player_season_stats(player_id: int, full_name: str, group: str, season: int = CURRENT_SEASON) -> PlayerStats:
+    """group is 'pitching' or 'hitting'."""
+    data = _get(f"/people/{player_id}/stats", stats="season", group=group, season=season)
+    return _player_stats(player_id, full_name, group, _first_split(data))

@@ -9,6 +9,7 @@ on a fully transparent background (no black box behind them):
     on the right of the banner and as the desktop shortcut icon.
 
 Run from the project root: python scripts/make_icon.py
+Needs Pillow (pip install Pillow); it is not in requirements.txt because the app itself never uses it.
 """
 from pathlib import Path
 import math
